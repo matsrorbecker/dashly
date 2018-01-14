@@ -1,0 +1,12 @@
+{
+    "bundle": "se.tt.dashly",
+    "name": "Dashly",
+    "description": "RSS plugin for Infomaker Dashboard",
+    "author": {
+        "name": "Mats Rörbecker",
+        "email": "mats.rorbecker@tt.se",
+        "organization": "TT Nyhetsbyrån AB",
+        "website": "www.tt.se"
+    },
+    "version": "1.0.0"
+}
