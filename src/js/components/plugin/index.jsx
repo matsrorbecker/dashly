@@ -6,11 +6,11 @@ import $ from 'jquery'
 	const moment = Dashboard.moment
 
 	class Application extends Dashboard.Application {
-		constructor(props) {
+		constructor({config}) {
 			super()
 
 			this.state = {
-				config: props.config,
+				config: JSON.parse(config.configEditor).config,
 				showPubTime: true, // TODO: Detta ska vara konfigurerbart
 				items: []
 			}
@@ -27,16 +27,19 @@ import $ from 'jquery'
 		render() {
 
 			const listItems = this.state.items.map(item => {
+				// Visa datum om nyheten är från annan dag, annars bara klockslag
+				const date = moment().isSame(item.pubDate, 'day') ? '' : item.pubDate.format('D/M') + ' '
+				const pubTime = date + item.pubDate.format('HH.mm')
 				return {
 					id: item.link,
-					title: `${this.state.showPubTime ? item.pubDate.format('HH.mm') + ': ' : ''}${item.title}`,
-					onClick: () => window.open(item.link)
+					title: `${this.state.showPubTime ? pubTime + ': ' : ''}${item.title}`,
+					onClick: () => window.open(item.link),
 				}
 			})
 
 			return (
 				<GUI.Wrapper className="@plugin_bundle_class">
-					<GUI.Title text={this.state.config.pluginTitle} />
+					<GUI.Title text={this.state.config.title} />
 					<GUI.List items={listItems} />
 				</GUI.Wrapper>
 			)
@@ -49,8 +52,10 @@ import $ from 'jquery'
 			console.log('Agent skapad!')
 			super()
 
-			this.updateInterval = (Number(config.updateInterval) >= 60 ? config.updateInterval : 60) * 1000 // Uppdatera högst en gång/minut
-			this.feeds = (config.defaultFeeds == '' ? [] : config.defaultFeeds.split(/,\s*/)) // TODO: hämta ev feeds från local storage
+			const pluginConfig = JSON.parse(config.configEditor).config
+			console.log(pluginConfig)
+			this.updateInterval = (Number(pluginConfig.updateInterval) >= 60 ? pluginConfig.updateInterval : 60) * 1000 // Uppdatera högst en gång/minut
+			this.feeds = (pluginConfig.feeds ? pluginConfig.feeds : []) // TODO: hämta ev feeds från local storage
 			this.update()
 
 			this.on('rss:get', () => {
@@ -95,7 +100,9 @@ import $ from 'jquery'
 			this.fetch()
 			.then(results => this.parseAll(results))
 			.then(newItems => {
-				const items = [].concat.apply([], newItems)
+				const items = [].concat.apply([], newItems).sort((a, b) => {
+					return b.pubDate.unix() - a.pubDate.unix()
+				})
 				// TODO: Dessa items ska läggas till dem som hämtats tidigare
 				// och hela listan ska sorteras innan den lagras och skickas
 				//this.store('rss', { items: data })
@@ -107,8 +114,8 @@ import $ from 'jquery'
 
 		fetch() {
 			return Promise.all(this.feeds.map(feed => {
-				console.log('Hämtar', feed)
-				return this.request(feed)
+				console.log('Hämtar', feed.url)
+				return this.request(feed.url)
 			}))
 			.then(responses => {
 				return Promise.all(responses.map(response => {
@@ -125,13 +132,13 @@ import $ from 'jquery'
 		parseOne(xmlDoc) {
 			return new Promise((resolve) => {
 				const items = []
-				const cdataRegex = /<!\[CDATA\[|\]\]\>/g 
+				const regex = /<!\[CDATA\[|\]\]\>|&quot;/g // TODO: Byt ut &quot;, &amp; etc mot rätt tecken
 				const xml = $.parseXML(xmlDoc) // TODO: Hantera fel
 				$('item', xml).each((i, element) => {
 					items.push({
-						title: $('title', element).text().replace(cdataRegex, ''),
+						title: $('title', element).text().replace(regex, ''),
 						link: $('link', element).text(),
-						description: $('description', element).text().replace(cdataRegex, ''),
+						description: $('description', element).text().replace(regex, ''),
 						pubDate: moment(new Date($('pubDate', element).text()))
 					})
 				})
@@ -149,16 +156,16 @@ import $ from 'jquery'
 
 	class Settings extends Dashboard.Settings {
 		plugin() {
-			return (
-				<GUI.Wrapper className="@plugin_bundle_class">
-					<GUI.ConfigInput name="Överskrift" ref="pluginTitle" value="" />
-					<GUI.ConfigInput name="Uppdateringsintervall (sekunder)" ref="updateInterval" validation={['required', 'numerical']} value="60" />
-					<GUI.ConfigInput name="Defaultflöden (separera med komma)" ref="defaultFeeds" value="" />
-				</GUI.Wrapper>
-			)
+			// return (
+			// 	<GUI.Wrapper className="@plugin_bundle_class">
+			// 		<GUI.ConfigInput name="Överskrift" ref="pluginTitle" value="" />
+			// 		<GUI.ConfigInput name="Uppdateringsintervall (sekunder, minvärde 60)" ref="updateInterval" validation={['required', 'numerical']} value="" />
+			// 		<GUI.ConfigInput name="Defaultflöden (separera med komma)" ref="defaultFeeds" value="" />
+			// 	</GUI.Wrapper>
+			// )
+			return <GUI.ConfigEditor ref="configEditor" />
 		}
 	}
-
 
 	Dashboard.register({
 		bundle: "@plugin_bundle",
